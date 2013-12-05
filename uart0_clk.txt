@@ -1,0 +1,39 @@
+UART0
+power domain:
+	wake-up domain
+clock domain:
+	PD_WKUP_L4_WKUP_GCLK (OCP)
+		source: CORE_CLKOUTM4/2
+	PD_WKUP_UART0_GFCLK (func)
+		source: PER_CLKOUTM2/4
+
+
+CORE_CLKOUTM4 from HSDIVIDER
+	(CORE_CLKOUTM4=200MHz)
+
+HSDIVIDER gets clk from its CLKINPHIFLDO (or CLKINBYPASS)
+
+CLKINPHIFLDO gets clk from Core PLL (CLKDCOLDO output)
+
+Core PLL (ADPLLS) gets clk from its CLKINP
+CLKINP is fed from CLK_M_OSC which is same as OSC0_IN
+
+
+REGM4XEN=0
+CLKDCOLDO = 2*(M/(N+1))*CLKINP
+
+REGM4XEN=1
+CLKDCOLDO = 2*(4M/(N+1))*CLKINP
+
+Configuring Core PLL: TRM 8.1.6.7.1
+
+
+
+
+PER_CLKOUTM2 from Per PLL : CLKOUT
+	(PER_CLKOUTM2 = 192MHz)
+	
+Per PLL (ADPLLJ) gets clk from its CLKINP
+CLKINP is fed by CLK_M_OSC (24MHz)
+
+Configuring Per PLL: TRM 8.1.6.8.1
