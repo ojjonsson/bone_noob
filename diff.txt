@@ -1,0 +1,306 @@
+diff --git a/Makefile b/Makefile
+old mode 100755
+new mode 100644
+index 84a7c32..ba13f3a
+--- a/Makefile
++++ b/Makefile
+@@ -13,7 +13,7 @@ AS_OPTS=-marm -mfpu=neon -march=armv7-a -g -c
+ 
+ all: my_init.elf my_init.bin my_init.lst
+ 
+-OBJS=my_init.o led.o
++OBJS=my_init.o led.o pll.o
+ 
+ my_init.elf: $(OBJS)
+ 	$(LD) -g -T my_init.lds $(OBJS) -o my_init.elf -Map my_init.map
+@@ -30,5 +30,8 @@ my_init.o: my_init.s
+ led.o: led.s
+ 	$(CC) $(AS_OPTS) led.s -o led.o
+ 
++pll.o: pll.s
++	$(CC) $(AS_OPTS) pll.s -o pll.o
++
+ clean:
+ 	rm *.o *.bin *.lst *.elf *.map
+diff --git a/core_pll_brute.c b/core_pll_brute.c
+old mode 100755
+new mode 100644
+diff --git a/led.s b/led.s
+old mode 100755
+new mode 100644
+index 584ae5b..81edad2
+--- a/led.s
++++ b/led.s
+@@ -32,6 +32,8 @@
+ 	.global init_usr_led
+ 	.global light_usr0_led
+ 	.global unlight_usr0_led
++	.global light_usr0_ledb
++	.global unlight_usr0_ledb
+ 	.global light_usr1_led
+ 	.global unlight_usr1_led
+ 	.global light_usr2_led
+@@ -76,6 +78,23 @@ unlight_usr0_led:
+ 	STR	R1,[R0,#GPIO_1_CLEARDATAOUT]
+ 	BX	LR
+ 
++light_usr0_ledb:	
++	@ Light USR0 led
++	LDR	R0,=GPIO_1_REGBASE
++/*	LDR	R1,=(1<<LED_USR0)*/
++	LDR	R1,[R0,#GPIO_1_DATAOUT]
++	ORR	R1,#(1<<LED_USR0)
++	STR	R1,[R0,#GPIO_1_DATAOUT]
++	BX	LR
++
++unlight_usr0_ledb:	
++	@ Light USR0 led
++	LDR	R0,=GPIO_1_REGBASE
++	LDR	R1,[R0,#GPIO_1_DATAOUT]
++	AND	R1,#~(1<<LED_USR0)
++	STR	R1,[R0,#GPIO_1_DATAOUT]
++	BX	LR
++
+ light_usr1_led:	
+ 	@ Light USR0 led
+ 	LDR	R0,=GPIO_1_REGBASE
+@@ -171,11 +190,15 @@ set_usr_led:
+ 	LDRGT	R0,=(-1)
+ 	BGT	end_set_usr_led
+ 
+-	LSL	R1,#LED_USR0
++	LSL	R0,#LED_USR0
++	LDR	R1,=GPIO_1_REGBASE
++	LDR	R1,[R1,#GPIO_1_DATAOUT]
++	AND	R1,#~((1<<LED_USR0)|(1<<LED_USR1)|(1<<LED_USR2)|(1<<LED_USR3))
++	ORR	R0,R1
+ 	
+ 	@ set USR led's to <R0> val
+-	LDR	R0,=GPIO_1_REGBASE
+-	STR	R1,[R0,#GPIO_1_DATAOUT]
++	LDR	R1,=GPIO_1_REGBASE
++	STR	R0,[R1,#GPIO_1_DATAOUT]
+ 	LDR	R0,=0
+ end_set_usr_led:
+ 	BX	LR
+diff --git a/my_init.lds b/my_init.lds
+old mode 100755
+new mode 100644
+diff --git a/my_init.s b/my_init.s
+old mode 100755
+new mode 100644
+index cd67a27..98d5dd5
+--- a/my_init.s
++++ b/my_init.s
+@@ -44,9 +44,24 @@ Entry:
+ 
+ 	BL	init_usr_led
+ 	
+-	LDR	R2,=0
++/*	LDR	R2,=0*/
++	LDR	R0,=1
++	BL 	set_usr_led
++	BL 	SetCorePLL
++	LDR	R0,=2
++	BL 	set_usr_led
++	BL 	SetPerPLL
++/*	LDR	R0,=3
++	BL 	set_usr_led*/
++
+ loop:
+ 
++/*
++	BL 	light_usr0_ledb
++	BL	delay_func
++	BL 	unlight_usr0_ledb
++	BL	delay_func
++*/
+ 	
+ 	MOV	R0,R2
+ 	BL set_usr_led
+@@ -54,7 +69,7 @@ loop:
+ 	ADDS	R2,#1
+ 	CMP		R2,#15
+ 	MOVGT	R2,#0
+-
++/**/
+ /*
+ 	LDR	R0,=2
+ 	BL	light_usr_led
+diff --git a/pll.s b/pll.s
+old mode 100755
+new mode 100644
+index d433546..be3f7f6
+--- a/pll.s
++++ b/pll.s
+@@ -53,22 +53,34 @@
+ 	m: 2000, n: 47
+ 
+ 	for simplicity, 1st val pair will be used for starters
++	rom code seems to set M=992 and N=23 which yields 1984MHz
+ 	*/
+ SetCorePLL:
+-	/* set PLL to bypass */
+ 	LDR	R2,=CM_WKUP_BASE
++
++	/* set PLL to bypass */
+ 	LDR	R3,[R2,#CM_CLKMODE_DPLL_CORE_OFFS]
++/*
++	BIC	R3,#(0x7<<DPLL_EN)
+ 	ORR	R3,#(0x4<<DPLL_EN)
++*/
++	BIC	R3,R3,#0x7
++	ORR	R3,R3,#0x4
+ 	STR	R3,[R2,#CM_CLKMODE_DPLL_CORE_OFFS]
+ 
+ CheckCorePLLBypass:
++
+ 	LDR	R3,[R2,#CM_IDLEST_DPLL_CORE_OFFS]
+-	ANDS	R3,#(1<<ST_MN_BYPASS)
++/*	ANDS	R3,#(1<<ST_MN_BYPASS) */
++	AND	R3,#0x100
++	CMP	R3,#0
+ 	BEQ	CheckCorePLLBypass
++/*
++	endless loop...
+ 	LDR	R3,[R2,#CM_IDLEST_DPLL_CORE_OFFS]
+ 	ANDS	R3,#(1<<ST_DPLL_CLK)
+ 	BEQ	CheckCorePLLBypass
+-
++*/
+ 	/* set mult and div, 1st mask off any existing bits */	
+ /*	
+ 	LDR	R3,[R2,#CM_CLKSEL_DLL_CORE_OFFS]
+@@ -79,31 +91,40 @@ CheckCorePLLBypass:
+ 	ORR	R3,R1
+ */
+ 	/* Here, hard code R0 (M) and R1 (N) */
+-	LDR	R0,=125
+-	LDR	R1,=2
+ /*
+ 	AND	R0,#0x03FF
+ 	AND	R1,#0x7F
+ */
++	LDR	R0,=125
++	LDR	R1,=2
++	
++	LDR	R3,[R2,#CM_CLKSEL_DLL_CORE_OFFS]
++	LDR	R4,=0x7FFFF
++	BIC	R3,R4
+ 	LSL	R0,#DPLL_MULT
+ 	ORR	R0,R1
+-	STR	R0,[R2,#CM_CLKSEL_DLL_CORE_OFFS]
++	ORR	R3,R0
++	STR	R3,[R2,#CM_CLKSEL_DLL_CORE_OFFS]
+ 
+ 	/* set M4, M5, & M6 dividers */
+ 	/* M4 200MHz, M5 250MHz, M6 500MHz */
+ 	/* M4 DIV=10, M5 DIV=8, M6 DIV=4 */
+ 	/* M4 */
+ 	LDR	R3,[R2,#CM_DIV_M4_DPLL_CORE_OFFS]
+-	AND	R4,#(1<<HS_DIVIDER_CLKOUT1_DIVCHACK)
++/*	AND	R4,#(1<<HS_DIVIDER_CLKOUT1_DIVCHACK) not necessary? */
+ 	ORR	R3,#10
+ 	STR	R3,[R2,#CM_DIV_M4_DPLL_CORE_OFFS]
++/*
++	endless loop...
+ 	LDR	R3,[R2,#CM_DIV_M4_DPLL_CORE_OFFS]
+ set_m4_div:
+ 	ANDS	R3,#(1<<HS_DIVIDER_CLKOUT1_DIVCHACK)
+ 	TEQ	R3,R4
+ 	BEQ	set_m4_div
++*/
+ 
+ 	/* M5 */
++
+ 	LDR	R3,[R2,#CM_DIV_M5_DPLL_CORE_OFFS]
+ 	AND	R4,#(1<<HS_DIVIDER_CLKOUT1_DIVCHACK)
+ 	ORR	R3,#8
+@@ -115,6 +136,7 @@ set_m5_div:
+ 	BEQ	set_m5_div
+ 
+ 	/* M6 */
++
+ 	LDR	R3,[R2,#CM_DIV_M6_DPLL_CORE_OFFS]
+ 	AND	R4,#(1<<HS_DIVIDER_CLKOUT1_DIVCHACK)
+ 	ORR	R3,#4
+@@ -127,17 +149,20 @@ set_m6_div:
+ 
+ 	/* set PLL to lock mode */
+ 	LDR	R3,[R2,#CM_CLKMODE_DPLL_CORE_OFFS]
++	BIC	R3,#(0x7<<DPLL_EN)
+ 	ORR	R3,#(0x7<<DPLL_EN)
+ 	STR	R3,[R2,#CM_CLKMODE_DPLL_CORE_OFFS]
+-
+ CheckCorePLL_Lock:
++/*
++	endless loop...
+ 	LDR	R3,[R2,#CM_IDLEST_DPLL_CORE_OFFS]
+ 	ANDS	R3,#(1<<ST_MN_BYPASS)
+ 	BEQ	CheckCorePLL_Lock
++*/
+ 	LDR	R3,[R2,#CM_IDLEST_DPLL_CORE_OFFS]
+ 	ANDS	R3,#(1<<ST_DPLL_CLK)
+ 	BEQ	CheckCorePLL_Lock
+-	
++
+ 	BX	LR
+ 
+ 
+@@ -218,6 +243,7 @@ SetPerPLL:
+ 	/* set PLL to bypass */
+ 	LDR	R2,=CM_WKUP_BASE
+ 	LDR	R3,[R2,#CM_CLKMODE_DPLL_PER_OFFS]
++	BIC	R3,#(0x7<<DPLL_EN)
+ 	ORR	R3,#(0x4<<DPLL_EN)
+ 	STR	R3,[R2,#CM_CLKMODE_DPLL_PER_OFFS]
+ 
+@@ -226,8 +252,10 @@ CheckPerPLLBypass:
+ 	ANDS	R3,#(1<<ST_MN_BYPASS)
+ 	BEQ	CheckPerPLLBypass
+ 	LDR	R3,[R2,#CM_IDLEST_DPLL_PER_OFFS]
++/*
+ 	ANDS	R3,#(1<<ST_DPLL_CLK)
+ 	BEQ	CheckPerPLLBypass
++*/
+ 
+ 	/* Here, hard code R0 (M) and R1 (N) */
+ 	LDR	R0,=40
+@@ -247,24 +275,30 @@ CheckPerPLLBypass:
+ 	ORR	R3,#5
+ 	ORR	R3,#(1<<ST_DPLL_CLKOUT)
+ 	STR	R3,[R2,#CM_DIV_M2_DPLL_PER_OFFS]
++/*
+ 	LDR	R3,[R2,#CM_DIV_M4_DPLL_CORE_OFFS]
+ set_m2_div:
+ 	ANDS	R3,#(1<<HS_DIVIDER_CLKOUT1_DIVCHACK)
+ 	TEQ	R3,R4
+ 	BEQ	set_m2_div
++*/
+ 
+ 	/* set PLL to lock mode */
+ 	LDR	R3,[R2,#CM_CLKMODE_DPLL_CORE_OFFS]
++	BIC	R3,#(0x7<<DPLL_EN)
+ 	ORR	R3,#(0x7<<DPLL_EN)
+ 	STR	R3,[R2,#CM_CLKMODE_DPLL_CORE_OFFS]
+ 
+ CheckPerPLL_Lock:
+ 	LDR	R3,[R2,#CM_IDLEST_DPLL_PER_OFFS]
++
+ 	ANDS	R3,#(1<<ST_MN_BYPASS)
+ 	BEQ	CheckPerPLL_Lock
+-	LDR	R3,[R2,#CM_IDLEST_DPLL_PER_OFFS]
++/*
+ 	ANDS	R3,#(1<<ST_DPLL_CLK)
+ 	BEQ	CheckPerPLL_Lock
++*/
++
+ 	
+ 	BX	LR
+ 
+diff --git a/uart.s b/uart.s
+old mode 100755
+new mode 100644
+diff --git a/uart0_clk.txt b/uart0_clk.txt
+old mode 100755
+new mode 100644

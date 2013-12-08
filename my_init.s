@@ -44,9 +44,24 @@ Entry:
 
 	BL	init_usr_led
 	
-	LDR	R2,=0
+/*	LDR	R2,=0*/
+	LDR	R0,=1
+	BL 	set_usr_led
+	BL 	SetCorePLL
+	LDR	R0,=2
+	BL 	set_usr_led
+	BL 	SetPerPLL
+/*	LDR	R0,=3
+	BL 	set_usr_led*/
+
 loop:
 
+/*
+	BL 	light_usr0_ledb
+	BL	delay_func
+	BL 	unlight_usr0_ledb
+	BL	delay_func
+*/
 	
 	MOV	R0,R2
 	BL set_usr_led
@@ -54,7 +69,7 @@ loop:
 	ADDS	R2,#1
 	CMP		R2,#15
 	MOVGT	R2,#0
-
+/**/
 /*
 	LDR	R0,=2
 	BL	light_usr_led

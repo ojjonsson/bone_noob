@@ -32,6 +32,8 @@
 	.global init_usr_led
 	.global light_usr0_led
 	.global unlight_usr0_led
+	.global light_usr0_ledb
+	.global unlight_usr0_ledb
 	.global light_usr1_led
 	.global unlight_usr1_led
 	.global light_usr2_led
@@ -74,6 +76,23 @@ unlight_usr0_led:
 	LDR	R0,=GPIO_1_REGBASE
 	LDR	R1,=(1<<LED_USR0)
 	STR	R1,[R0,#GPIO_1_CLEARDATAOUT]
+	BX	LR
+
+light_usr0_ledb:	
+	@ Light USR0 led
+	LDR	R0,=GPIO_1_REGBASE
+/*	LDR	R1,=(1<<LED_USR0)*/
+	LDR	R1,[R0,#GPIO_1_DATAOUT]
+	ORR	R1,#(1<<LED_USR0)
+	STR	R1,[R0,#GPIO_1_DATAOUT]
+	BX	LR
+
+unlight_usr0_ledb:	
+	@ Light USR0 led
+	LDR	R0,=GPIO_1_REGBASE
+	LDR	R1,[R0,#GPIO_1_DATAOUT]
+	AND	R1,#~(1<<LED_USR0)
+	STR	R1,[R0,#GPIO_1_DATAOUT]
 	BX	LR
 
 light_usr1_led:	
@@ -171,11 +190,15 @@ set_usr_led:
 	LDRGT	R0,=(-1)
 	BGT	end_set_usr_led
 
-	LSL	R1,#LED_USR0
+	LSL	R0,#LED_USR0
+	LDR	R1,=GPIO_1_REGBASE
+	LDR	R1,[R1,#GPIO_1_DATAOUT]
+	AND	R1,#~((1<<LED_USR0)|(1<<LED_USR1)|(1<<LED_USR2)|(1<<LED_USR3))
+	ORR	R0,R1
 	
 	@ set USR led's to <R0> val
-	LDR	R0,=GPIO_1_REGBASE
-	STR	R1,[R0,#GPIO_1_DATAOUT]
+	LDR	R1,=GPIO_1_REGBASE
+	STR	R0,[R1,#GPIO_1_DATAOUT]
 	LDR	R0,=0
 end_set_usr_led:
 	BX	LR

@@ -13,7 +13,7 @@ AS_OPTS=-marm -mfpu=neon -march=armv7-a -g -c
 
 all: my_init.elf my_init.bin my_init.lst
 
-OBJS=my_init.o led.o
+OBJS=my_init.o led.o pll.o
 
 my_init.elf: $(OBJS)
 	$(LD) -g -T my_init.lds $(OBJS) -o my_init.elf -Map my_init.map
@@ -29,6 +29,9 @@ my_init.o: my_init.s
 
 led.o: led.s
 	$(CC) $(AS_OPTS) led.s -o led.o
+
+pll.o: pll.s
+	$(CC) $(AS_OPTS) pll.s -o pll.o
 
 clean:
 	rm *.o *.bin *.lst *.elf *.map

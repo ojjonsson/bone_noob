@@ -53,22 +53,34 @@
 	m: 2000, n: 47
 
 	for simplicity, 1st val pair will be used for starters
+	rom code seems to set M=992 and N=23 which yields 1984MHz
 	*/
 SetCorePLL:
-	/* set PLL to bypass */
 	LDR	R2,=CM_WKUP_BASE
+
+	/* set PLL to bypass */
 	LDR	R3,[R2,#CM_CLKMODE_DPLL_CORE_OFFS]
+/*
+	BIC	R3,#(0x7<<DPLL_EN)
 	ORR	R3,#(0x4<<DPLL_EN)
+*/
+	BIC	R3,R3,#0x7
+	ORR	R3,R3,#0x4
 	STR	R3,[R2,#CM_CLKMODE_DPLL_CORE_OFFS]
 
 CheckCorePLLBypass:
+
 	LDR	R3,[R2,#CM_IDLEST_DPLL_CORE_OFFS]
-	ANDS	R3,#(1<<ST_MN_BYPASS)
+/*	ANDS	R3,#(1<<ST_MN_BYPASS) */
+	AND	R3,#0x100
+	CMP	R3,#0
 	BEQ	CheckCorePLLBypass
+/*
+	endless loop...
 	LDR	R3,[R2,#CM_IDLEST_DPLL_CORE_OFFS]
 	ANDS	R3,#(1<<ST_DPLL_CLK)
 	BEQ	CheckCorePLLBypass
-
+*/
 	/* set mult and div, 1st mask off any existing bits */	
 /*	
 	LDR	R3,[R2,#CM_CLKSEL_DLL_CORE_OFFS]
@@ -79,31 +91,40 @@ CheckCorePLLBypass:
 	ORR	R3,R1
 */
 	/* Here, hard code R0 (M) and R1 (N) */
-	LDR	R0,=125
-	LDR	R1,=2
 /*
 	AND	R0,#0x03FF
 	AND	R1,#0x7F
 */
+	LDR	R0,=125
+	LDR	R1,=2
+	
+	LDR	R3,[R2,#CM_CLKSEL_DLL_CORE_OFFS]
+	LDR	R4,=0x7FFFF
+	BIC	R3,R4
 	LSL	R0,#DPLL_MULT
 	ORR	R0,R1
-	STR	R0,[R2,#CM_CLKSEL_DLL_CORE_OFFS]
+	ORR	R3,R0
+	STR	R3,[R2,#CM_CLKSEL_DLL_CORE_OFFS]
 
 	/* set M4, M5, & M6 dividers */
 	/* M4 200MHz, M5 250MHz, M6 500MHz */
 	/* M4 DIV=10, M5 DIV=8, M6 DIV=4 */
 	/* M4 */
 	LDR	R3,[R2,#CM_DIV_M4_DPLL_CORE_OFFS]
-	AND	R4,#(1<<HS_DIVIDER_CLKOUT1_DIVCHACK)
+/*	AND	R4,#(1<<HS_DIVIDER_CLKOUT1_DIVCHACK) not necessary? */
 	ORR	R3,#10
 	STR	R3,[R2,#CM_DIV_M4_DPLL_CORE_OFFS]
+/*
+	endless loop...
 	LDR	R3,[R2,#CM_DIV_M4_DPLL_CORE_OFFS]
 set_m4_div:
 	ANDS	R3,#(1<<HS_DIVIDER_CLKOUT1_DIVCHACK)
 	TEQ	R3,R4
 	BEQ	set_m4_div
+*/
 
 	/* M5 */
+
 	LDR	R3,[R2,#CM_DIV_M5_DPLL_CORE_OFFS]
 	AND	R4,#(1<<HS_DIVIDER_CLKOUT1_DIVCHACK)
 	ORR	R3,#8
@@ -115,6 +136,7 @@ set_m5_div:
 	BEQ	set_m5_div
 
 	/* M6 */
+
 	LDR	R3,[R2,#CM_DIV_M6_DPLL_CORE_OFFS]
 	AND	R4,#(1<<HS_DIVIDER_CLKOUT1_DIVCHACK)
 	ORR	R3,#4
@@ -127,17 +149,20 @@ set_m6_div:
 
 	/* set PLL to lock mode */
 	LDR	R3,[R2,#CM_CLKMODE_DPLL_CORE_OFFS]
+	BIC	R3,#(0x7<<DPLL_EN)
 	ORR	R3,#(0x7<<DPLL_EN)
 	STR	R3,[R2,#CM_CLKMODE_DPLL_CORE_OFFS]
-
 CheckCorePLL_Lock:
+/*
+	endless loop...
 	LDR	R3,[R2,#CM_IDLEST_DPLL_CORE_OFFS]
 	ANDS	R3,#(1<<ST_MN_BYPASS)
 	BEQ	CheckCorePLL_Lock
+*/
 	LDR	R3,[R2,#CM_IDLEST_DPLL_CORE_OFFS]
 	ANDS	R3,#(1<<ST_DPLL_CLK)
 	BEQ	CheckCorePLL_Lock
-	
+
 	BX	LR
 
 
@@ -218,6 +243,7 @@ SetPerPLL:
 	/* set PLL to bypass */
 	LDR	R2,=CM_WKUP_BASE
 	LDR	R3,[R2,#CM_CLKMODE_DPLL_PER_OFFS]
+	BIC	R3,#(0x7<<DPLL_EN)
 	ORR	R3,#(0x4<<DPLL_EN)
 	STR	R3,[R2,#CM_CLKMODE_DPLL_PER_OFFS]
 
@@ -226,8 +252,10 @@ CheckPerPLLBypass:
 	ANDS	R3,#(1<<ST_MN_BYPASS)
 	BEQ	CheckPerPLLBypass
 	LDR	R3,[R2,#CM_IDLEST_DPLL_PER_OFFS]
+/*
 	ANDS	R3,#(1<<ST_DPLL_CLK)
 	BEQ	CheckPerPLLBypass
+*/
 
 	/* Here, hard code R0 (M) and R1 (N) */
 	LDR	R0,=40
@@ -247,24 +275,30 @@ CheckPerPLLBypass:
 	ORR	R3,#5
 	ORR	R3,#(1<<ST_DPLL_CLKOUT)
 	STR	R3,[R2,#CM_DIV_M2_DPLL_PER_OFFS]
+/*
 	LDR	R3,[R2,#CM_DIV_M4_DPLL_CORE_OFFS]
 set_m2_div:
 	ANDS	R3,#(1<<HS_DIVIDER_CLKOUT1_DIVCHACK)
 	TEQ	R3,R4
 	BEQ	set_m2_div
+*/
 
 	/* set PLL to lock mode */
 	LDR	R3,[R2,#CM_CLKMODE_DPLL_CORE_OFFS]
+	BIC	R3,#(0x7<<DPLL_EN)
 	ORR	R3,#(0x7<<DPLL_EN)
 	STR	R3,[R2,#CM_CLKMODE_DPLL_CORE_OFFS]
 
 CheckPerPLL_Lock:
 	LDR	R3,[R2,#CM_IDLEST_DPLL_PER_OFFS]
+
 	ANDS	R3,#(1<<ST_MN_BYPASS)
 	BEQ	CheckPerPLL_Lock
-	LDR	R3,[R2,#CM_IDLEST_DPLL_PER_OFFS]
+/*
 	ANDS	R3,#(1<<ST_DPLL_CLK)
 	BEQ	CheckPerPLL_Lock
+*/
+
 	
 	BX	LR
 
