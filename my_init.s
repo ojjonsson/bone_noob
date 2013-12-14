@@ -54,6 +54,10 @@ Entry:
 /*	LDR	R0,=3
 	BL 	set_usr_led*/
 
+	BL 	init_uart0
+	BL 	set_uart0_mux
+	BL 	set_uart0_pwr_clk
+
 loop:
 
 /*

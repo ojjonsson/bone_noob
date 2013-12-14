@@ -24,12 +24,18 @@ PD_WKUP_UART0_GFCLK (Func)
 	.set UART0_MCR_OFFS,			0x10
 	.set UART0_MDR1_OFFS,			0x20
 	.set UART0_TCR_OFFS,			0x18
+	.set UART0_LSR,					0x20
 
 	.set SOFTRESET,				1
 	.set RESETDONE,				0
 	.set ENHANCED_EN,			4
 	.set TCR_TLR,				6
 	.set FIFO_ENABLE,			0
+	.set AUTO_CTS_EN,			7
+	.set AUTO_RTS_EN,			6
+	.set TXFIFOE,				5
+	.set RXFIFOE,				0
+	
 	
 	/* DLH/DLL values for 115200 baud rate at 48MHz clock */
 	.set DLH_VALUE_115200,			0x00
@@ -38,6 +44,8 @@ PD_WKUP_UART0_GFCLK (Func)
 	.global init_uart0
 	.global set_uart0_mux
 	.global set_uart0_pwr_clk
+	.global uart0_putc
+	.global uart0_getc
 
 	.text
 	
@@ -162,10 +170,11 @@ no_restore_1:
 	STR	R3,[R2,#UART0_LCR_OFFS]
 	/* 19.4.1.1.2 step 11 */
 	/* restore MCR:TCR_TLR */
-	ANDS	R6,#(1<<TCR_TLR)
-	ANDEQ	R6,=~(1<<TCR_TLR)
-	ORRNE	R6,=(1<<TCR_TLR)
-	STR	R6,[R2,#UART0_MCR_OFFS]
+	LDR	R3,[R2,#UART0_MCR_OFFS]
+	BIC	R3,#(1<<TCR_TLR)
+	AND	R6,#(1<<TCR_TLR)
+	ORR	R3,R6
+	STR	R3,[R2,#UART0_MCR_OFFS]
 	/* 19.4.1.1.2 step 12 */
 	/* restore LCR reg val */
 	STR	R4,[R2,#UART0_LCR_OFFS]
@@ -193,9 +202,9 @@ no_restore_1:
 	LDR	R3,=0x00BF
 	STR	R3,[R2,#UART0_LCR_OFFS]
 	/* 19.4.1.1.3 step 7 */
-	LDR	R3,=DLL_VALUE
+	LDR	R3,=DLL_VALUE_115200
 	STR	R3,[R2,#UART0_RHR_THR_DLL_OFFS]
-	LDR	R3,=DLH_VALUE
+	LDR	R3,=DLH_VALUE_115200
 	STR	R3,[R2,#UART0_IER_DLH_OFFS]
 	/* 19.4.1.1.3 step 8 */
 	LDR	R3,=0x0000
@@ -215,7 +224,6 @@ no_restore_1:
 	STR	R3,[R2,#UART0_IIR_FCR_EFR_OFFS]
 no_restore_2:
 
-#error check done to this point
 	/* 19.4.1.1.3 step 12 */
 	/* here, set parity, stop bits, char len */
 	LDR	R3,[R2,#UART0_LCR_OFFS]
@@ -249,8 +257,58 @@ no_restore_2:
 	LDR	R3,=0x0
 	STR	R3,[R2,#UART0_TCR_OFFS] 
 	/* 19.4.1.2.1, bullet 6 */
-	/* save EFR:ENHANCED_EN val to R5 */
-	LDR	R3,[R2,#UART0_IIR_FCR_EFR_OFFS]
+	LDR R3,[R2,#UART0_IIR_FCR_EFR_OFFS]
+	BIC	R3,#(1<<AUTO_CTS_EN)
+	BIC	R3,#(1<<AUTO_RTS_EN)
+	AND	R5,R5,#(1<<ENHANCED_EN)
+	BIC	R3,#(1<<ENHANCED_EN)
+	ORR	R3,R5
+	STR R3,[R2,#UART0_IIR_FCR_EFR_OFFS]
+	/* 19.4.1.2.1, bullet 7 */
+	LDR	R3,=0x0080
+	STR	R3,[R2,#UART0_LCR_OFFS]
+	/* 19.4.1.2.1, bullet 8 */
+	LDR	R3,[R2,#UART0_MCR_OFFS]
+	AND	R6,#(1<<TCR_TLR)
+	BIC	R3,#(1<<TCR_TLR)
+	ORR	R3,R6
+	STR	R3,[R2,#UART0_MCR_OFFS]
+	/* 19.4.1.2.1, bullet 9 */
+	STR	R7,[R2,#UART0_LCR_OFFS]
+	
+	/* SW flow */
+	/* assume 'off' by default, and do nothing here */
+	/* 19.4.1.2.2, bullet 1 */
+	/* 19.4.1.2.2, bullet 2 */
+	/* 19.4.1.2.2, bullet 3 */
+	/* 19.4.1.2.2, bullet 4 */
+	/* 19.4.1.2.2, bullet 5 */
+	/* 19.4.1.2.2, bullet 6 */
+	/* 19.4.1.2.2, bullet 7 */
+	/* 19.4.1.2.2, bullet 8 */
+	/* 19.4.1.2.2, bullet 9 */
+	/* 19.4.1.2.2, bullet 10 */
+	/* 19.4.1.2.2, bullet 11 */
+	/* 19.4.1.2.2, bullet 12 */
 
 
+	
+uart0_putc:
+	LDR		R2,=UART0_BASE
+uart0_putc_loop:
+	LDR		R1,[R2,#UART0_LSR]
+	CMP		R1,#(1<<TXFIFOE)
+	BEQ		uart0_putc_loop
+	STR		R0,[R2,#0]
+	BX		LR
+	
+uart_getc:
+	LDR		R2,=UART0_BASE
+uart0_getc_loop:
+	LDR		R1,[R2,#UART0_LSR]
+	CMP		R1,#(1<<RXFIFOE)
+	BEQ		uart0_getc_loop
+	LDR		R0,[R2,#0]
+	BX	LR
+	
 	.end
